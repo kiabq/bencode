@@ -3,6 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"math"
+	"strconv"
 )
 
 type BencodeType int
@@ -66,31 +68,82 @@ func (d *Decoder) ParseType(val []byte) (BencodeType, error) {
 	}
 }
 
-func (d *Decoder) ParseByteString() ([]byte, error) {
-	curr := d.buf[:d.pos]
-	fmt.Printf("Current position (%v) and value (%v)\n", d.pos, curr)
-	fmt.Printf("Value before cursor is %v\n", string(d.buf[:d.pos]))
+func (d *Decoder) GetPieceLength(piece []byte) (int64, error) {
+	// len is type int, not sure how to determine bit size on any given arch.
+	length := len(piece)
 
-	parsed, err := d.ParseType(curr)
+	if length > math.MaxInt {
+		return -1, errors.New("piece length exceeds int64 max value")
+	}
+
+	return 0, nil
+}
+
+func (d *Decoder) ParseByteString() ([]byte, error) {
+	curr := d.buf[d.pos:]
+	var k, v []byte
+	sep := false
+
+	for _, b := range curr {
+		d.pos++
+		// could be found before string is finished computing
+		// should handle that as an error, not now though
+		// assuming all strings and lengths are equal for now
+		if string(b) == ":" {
+			sep = true
+			continue
+		}
+
+		if sep {
+			v = append(v, b)
+		} else {
+			k = append(k, b)
+		}
+	}
+
+	length, err := strconv.Atoi(string(k))
 	if err != nil {
 		return nil, err
 	}
 
-	if parsed != EncodedByteString {
-		return nil, errors.New("not valid byte string")
+	fmt.Println(string(v), length)
+
+	if length != len(v) {
+		return nil, errors.New("ParseByteString failed to decode")
 	}
 
-	return curr, nil
+	return v, nil
 }
 
 func (d *Decoder) ParseInt() (int64, error) {
+	//curr := d.buf[d.pos:]
+
 	return 0, nil
 }
 
 func (d *Decoder) ParseList() ([]byte, error) {
+	curr := d.buf[d.pos:]
+
+	for _, b := range curr {
+		if b == 'l' {
+			d.pos++
+			continue
+		} else if b == 'e' {
+			continue
+		} else {
+			v, err := d.ParseByteString()
+			if err != nil {
+				return nil, err
+			}
+			fmt.Println("ParseList() ", string(v))
+		}
+	}
+
 	return nil, nil
 }
 
 func (d *Decoder) ParseDictionary() ([]byte, error) {
+	//curr := d.buf[d.pos:]
+
 	return nil, nil
 }

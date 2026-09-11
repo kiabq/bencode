@@ -1,7 +1,9 @@
 package main
 
 import (
-	"fmt"
+	"errors"
+	"math"
+	"strconv"
 	"testing"
 )
 
@@ -31,15 +33,33 @@ import (
 func TestDecoder(t *testing.T) {
 	d := Decoder{
 		buf: make([]byte, 0),
-		pos: 10,
+		pos: 0,
 	}
 
-	d.buf = append(d.buf, []byte("17:abcdefghijklmnopqrstuvwxyz")...)
+	d.buf = append(d.buf, []byte("l4:spam4:eggse")...)
 
-	fmt.Println("Buffer is: ", d.buf, string(d.buf))
-
-	_, err := d.ParseByteString()
+	_, err := d.ParseList()
 	if err != nil {
-		fmt.Println("Error: ", err)
+		t.Errorf("ParseByteString: %v\n", err)
+	}
+}
+
+func TestInt64MaxValue(t *testing.T) {
+	//var maxInt64 string = "9223372036854775807"
+	var overflowInt64 = strconv.Itoa(math.MaxInt - 1)
+	_, err := strconv.Atoi("9223372036854775808")
+	if err != nil {
+		if errors.Is(err, strconv.ErrRange) {
+			t.Errorf("overflowString -> int64 exceeds range")
+		} else {
+			t.Errorf("unknown error: %v\n", err)
+		}
+	}
+
+	_, err = strconv.ParseInt(overflowInt64, 10, 64)
+	if err != nil {
+		if errors.Is(err, strconv.ErrRange) {
+			t.Errorf("int64 exceeds range")
+		}
 	}
 }
