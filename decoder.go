@@ -94,6 +94,18 @@ func (d *Decoder) ParseInt() (int64, error) {
 }
 
 func (d *Decoder) ParseByteString() ([]byte, error) {
+	//var length string
+	for i, b := range d.buf[d.pos:] {
+		if i == 0 {
+			if b == '-' { // invalid, byte string can't be negative
+				// throw error for negative byte string
+			}
+
+			if b == ':' {
+				// no length, error
+			}
+		}
+	}
 
 	return nil, nil
 }
