@@ -23,6 +23,7 @@ type Decoder struct {
 	pos int
 }
 
+// TODO: PASS IO READER INTO THIS METHOD
 func (d *Decoder) Decode() error {
 	b := d.buf[d.pos]
 
@@ -60,6 +61,10 @@ func (d *Decoder) ParseInt() (int64, error) {
 
 			if b == '-' { // check if int negative
 				startNegative = true
+			}
+
+			if b == 'e' {
+				return 0, errors.New("no integer")
 			}
 
 			continue

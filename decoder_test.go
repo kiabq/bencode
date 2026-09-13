@@ -1,19 +1,19 @@
 package main
 
 import (
-	"fmt"
 	"testing"
 )
 
+type DecoderTest struct {
+	name string
+	val  []byte
+	pos  int
+	fail bool
+}
+
 func TestDecoder(t *testing.T) {
 	t.Run("ParseInt", func(t *testing.T) {
-		tests := []struct {
-			name     string
-			val      []byte
-			pos      int
-			fail     bool
-			expected any
-		}{
+		tests := []DecoderTest{
 			{name: "positive integer", val: []byte("i105e"), fail: false},
 			{name: "zero integer", val: []byte("i0e"), fail: false},
 			{name: "in a list", val: []byte("i42e"), pos: 3, fail: false},
@@ -25,6 +25,7 @@ func TestDecoder(t *testing.T) {
 			{name: "contains minus", val: []byte("i4-2e"), fail: true},
 			{name: "missing terminator character", val: []byte("i21321312"), fail: true},
 			{name: "incorrect terminator", val: []byte("i42d"), fail: true},
+			{name: "no integer", val: []byte("ie"), fail: true},
 		}
 
 		for _, tt := range tests {
@@ -35,11 +36,8 @@ func TestDecoder(t *testing.T) {
 				}
 
 				d.buf = append(d.buf, tt.val...)
+
 				integer, err := d.ParseInt()
-				fmt.Println("position: ", d.pos)
-				fmt.Println("buffer @ position: ", string(d.buf[:d.pos]))
-				fmt.Println("integer: ", integer)
-				fmt.Println("error: ", err)
 				if err != nil && !tt.fail {
 					t.Errorf("ParseInt: %v\n", err)
 				} else {
@@ -48,4 +46,19 @@ func TestDecoder(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("ParseByteString", func(t *testing.T) {
+		tests := []DecoderTest{
+			{name: "valid bytestring"},
+		}
+
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+
+			})
+		}
+	})
+
+	t.Run("ParseList", func(t *testing.T) {})
+	t.Run("ParseDictionary", func(t *testing.T) {})
 }
