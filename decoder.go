@@ -60,15 +60,26 @@ func (d *Decoder) ParseInt() (int64, error) {
 
 			if b == '-' { // check if int negative
 				startNegative = true
-				continue
-			}
-		} else if b >= '0' && b <= '9' && !startZero { // then, check if is number
-			if b == '0' && startNegative {
-				return -1, errors.New("negative zero")
 			}
 
 			continue
-		} else if b == 'e' { // if not number, then it is end.
+		}
+
+		if b >= '0' && b <= '9' { // then, check if is number
+			if startZero {
+				return 0, errors.New("leading zero error")
+			}
+
+			if b == '0' {
+				if startNegative {
+					return 0, errors.New("negative zero")
+				}
+			}
+
+			continue
+		}
+
+		if b == 'e' { // if not number, then it is end.
 			integerSlice := d.buf[d.pos+1 : d.pos+i]
 			integer, err := strconv.ParseInt(string(integerSlice), 10, 64)
 			if err != nil {
@@ -77,20 +88,17 @@ func (d *Decoder) ParseInt() (int64, error) {
 					// maybe special error?
 				}
 
-				return -1, err // parse int failed
-			} else {
-				d.pos += i + 1
-				return integer, nil
+				return 0, err // parse int failed
 			}
 
+			d.pos += i + 1
+			return integer, nil
 		} else {
-			if startZero {
-				return -1, errors.New("leading zero error")
-			}
+			return 0, errors.New("wrong terminator")
 		}
 	}
 
-	return 0, nil
+	return 0, errors.New("unexpected end of input")
 }
 
 func (d *Decoder) ParseByteString() ([]byte, error) {

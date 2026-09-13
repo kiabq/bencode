@@ -14,7 +14,7 @@ func TestDecoder(t *testing.T) {
 			fail     bool
 			expected any
 		}{
-			{name: "positive integer", val: []byte("i1337e"), fail: false},
+			{name: "positive integer", val: []byte("i105e"), fail: false},
 			{name: "zero integer", val: []byte("i0e"), fail: false},
 			{name: "in a list", val: []byte("i42e"), pos: 3, fail: false},
 			{name: "leading zero integer", val: []byte("i042e"), fail: true},
@@ -24,6 +24,7 @@ func TestDecoder(t *testing.T) {
 			{name: "double negative", val: []byte("i--2e"), fail: true},
 			{name: "contains minus", val: []byte("i4-2e"), fail: true},
 			{name: "missing terminator character", val: []byte("i21321312"), fail: true},
+			{name: "incorrect terminator", val: []byte("i42d"), fail: true},
 		}
 
 		for _, tt := range tests {
