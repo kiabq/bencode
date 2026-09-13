@@ -2,148 +2,110 @@ package main
 
 import (
 	"errors"
-	"fmt"
-	"math"
 	"strconv"
 )
 
-type BencodeType int
+/* example of structured bencode
 
-const (
-	EncodedByteString BencodeType = iota
-	EncodedInt
-	EncodedList
-	EncodedDictionary
-	EncodedUnknown
-)
+d:                        {meaning: 42, disturb: [bencode, -20]}
+	7:meaning:
+		42
+	7:disturb:
+		l7:               [bencode, -20]
+			bencode
+			i-20e
+		e
+e
+*/
 
-func (b BencodeType) String() string {
-	switch b {
-	case EncodedByteString:
-		return "byte_string"
-	case EncodedInt:
-		return "integer"
-	case EncodedList:
-		return "list"
-	case EncodedDictionary:
-		return "dictionary"
-	default:
-		return "unknown"
-	}
-}
-
-// unsure how to structure the decoder struct...
-// how to read strings into memeory?
-// i think the idea is you read a file in chunks
-// so you can stream to the decoder
 type Decoder struct {
 	buf []byte
 	pos int
 }
 
-/*
-64, 32, 16, 8, 4, 2, 1
+func (d *Decoder) Decode() error {
+	b := d.buf[d.pos]
 
-1, 0, 0, 0, 0, 1 = A (65 in ASCII)
-
-need a parser that can parse byte strings, integers, lists, and dictionaries
-
-* Byte Strings
-for byte strings, we must guard against overflow on the length integer
-we will want to determine if it's a valid byte string.
-to determine that, you check if the byte string length is equal to the length value specified
-*/
-func (d *Decoder) ParseType(val []byte) (BencodeType, error) {
-	switch {
-	case val[0] >= '0' && val[0] <= '9':
-		return EncodedByteString, nil
-	case val[0] == 'i':
-		return EncodedInt, nil
-	case val[0] == 'l':
-		return EncodedList, nil
-	case val[0] == 'd':
-		return EncodedDictionary, nil
+	switch b {
+	case 'i':
+		_, err := d.ParseInt()
+		if err != nil {
+			return err
+		}
+	case 'l':
+		return nil
+	case 'd':
+		return nil
 	default:
-		return EncodedUnknown, fmt.Errorf("unknown Type: %v\n", val)
+		if b >= '0' && b <= '9' {
+			return nil
+		}
 	}
+
+	return nil
 }
 
-func (d *Decoder) GetPieceLength(piece []byte) (int64, error) {
-	// len is type int, not sure how to determine bit size on any given arch.
-	length := len(piece)
+func (d *Decoder) ParseInt() (int64, error) {
+	startZero := false
+	startNegative := false
+	for i, b := range d.buf[d.pos:] {
+		if i == 0 { // byte is 'i', skip loop
+			continue
+		}
 
-	if length > math.MaxInt {
-		return -1, errors.New("piece length exceeds int64 max value")
+		if i == 1 {
+			if b == '0' { // check for zero, used to determine leading zero later
+				startZero = true
+			}
+
+			if b == '-' { // check if int negative
+				startNegative = true
+				continue
+			}
+		} else if b >= '0' && b <= '9' && !startZero { // then, check if is number
+			if b == '0' && startNegative {
+				return -1, errors.New("negative zero")
+			}
+
+			continue
+		} else if b == 'e' { // if not number, then it is end.
+			integerSlice := d.buf[d.pos+1 : d.pos+i]
+			integer, err := strconv.ParseInt(string(integerSlice), 10, 64)
+			if err != nil {
+				// err int overflow
+				if errors.Is(err, strconv.ErrRange) {
+					// maybe special error?
+				}
+
+				return -1, err // parse int failed
+			} else {
+				d.pos += i + 1
+				return integer, nil
+			}
+
+		} else {
+			if startZero {
+				return -1, errors.New("leading zero error")
+			}
+		}
 	}
 
 	return 0, nil
 }
 
 func (d *Decoder) ParseByteString() ([]byte, error) {
-	curr := d.buf[d.pos:]
-	var k, v []byte
-	sep := false
 
-	for _, b := range curr {
-		d.pos++
-		// could be found before string is finished computing
-		// should handle that as an error, not now though
-		// assuming all strings and lengths are equal for now
-		if string(b) == ":" {
-			sep = true
-			continue
-		}
-
-		if sep {
-			v = append(v, b)
-		} else {
-			k = append(k, b)
-		}
-	}
-
-	length, err := strconv.Atoi(string(k))
-	if err != nil {
-		return nil, err
-	}
-
-	fmt.Println(string(v), length)
-
-	if length != len(v) {
-		return nil, errors.New("ParseByteString failed to decode")
-	}
-
-	return v, nil
-}
-
-func (d *Decoder) ParseInt() (int64, error) {
-	//curr := d.buf[d.pos:]
-
-	return 0, nil
+	return nil, nil
 }
 
 func (d *Decoder) ParseList() ([]byte, error) {
-	curr := d.buf[d.pos:]
-
-	for _, b := range curr {
-		if b == 'l' {
-			d.pos++
-			continue
-		} else if b == 'e' {
-			continue
-		} else {
-			v, err := d.ParseByteString()
-			if err != nil {
-				return nil, err
-			}
-			fmt.Println("ParseList() ", string(v))
-		}
-	}
+	d.pos++
 
 	return nil, nil
 }
 
 func (d *Decoder) ParseDictionary() ([]byte, error) {
-	//curr := d.buf[d.pos:]
+	d.pos++
 
 	return nil, nil
 }
