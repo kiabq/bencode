@@ -107,16 +107,37 @@ func (d *Decoder) ParseInt() (int64, error) {
 }
 
 func (d *Decoder) ParseByteString() ([]byte, error) {
-	//var length string
+	var sep bool = false
+	var length int
+
 	for i, b := range d.buf[d.pos:] {
 		if i == 0 {
 			if b == '-' { // invalid, byte string can't be negative
 				// throw error for negative byte string
 			}
 
-			if b == ':' {
+			if b == ':' || b < '0' || b > '9' {
 				// no length, error
 			}
+		} else {
+			if !sep {
+				if b < '0' || b > '9' {
+					// error, length not followed by separator
+				}
+
+				if b == ':' {
+					sep = true
+
+					v, err := strconv.ParseInt(string(d.buf[d.pos:i]), 10, 64)
+					if err != nil {
+						// error something went wrong parsing length
+					}
+					length = int(v)
+
+					continue
+				}
+			}
+
 		}
 	}
 
