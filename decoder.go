@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 )
 
@@ -75,10 +76,8 @@ func (d *Decoder) ParseInt() (int64, error) {
 				return 0, errors.New("leading zero error")
 			}
 
-			if b == '0' {
-				if startNegative {
-					return 0, errors.New("negative zero")
-				}
+			if i == 2 && b == '0' && startNegative {
+				return 0, errors.New("negative zero")
 			}
 
 			continue
@@ -87,10 +86,22 @@ func (d *Decoder) ParseInt() (int64, error) {
 		if b == 'e' { // if not number, then it is end.
 			integerSlice := d.buf[d.pos+1 : d.pos+i]
 			integer, err := strconv.ParseInt(string(integerSlice), 10, 64)
+
+			fmt.Println(string(integerSlice))
+			fmt.Println("INT GREATER THAN ZERO: ", integer > 0)
+			fmt.Println("INT IS NEGATIVE: ", startNegative)
+
+			// err int underflow
+			if startNegative && integer > 0 {
+
+				return 0, errors.New("integer underflow")
+			}
+
 			if err != nil {
 				// err int overflow
 				if errors.Is(err, strconv.ErrRange) {
 					// maybe special error?
+					return 0, errors.New("integer overflow")
 				}
 
 				return 0, err // parse int failed
@@ -107,41 +118,57 @@ func (d *Decoder) ParseInt() (int64, error) {
 }
 
 func (d *Decoder) ParseByteString() ([]byte, error) {
-	var sep bool = false
+	var sep = false
+	//var eof = false
 	var length int
+	var byteString = make([]byte, 0)
 
 	for i, b := range d.buf[d.pos:] {
 		if i == 0 {
 			if b == '-' { // invalid, byte string can't be negative
 				// throw error for negative byte string
+				return nil, errors.New("length can't be negative")
 			}
 
 			if b == ':' || b < '0' || b > '9' {
 				// no length, error
+				return nil, errors.New("no length")
 			}
 		} else {
 			if !sep {
-				if b < '0' || b > '9' {
-					// error, length not followed by separator
-				}
-
 				if b == ':' {
 					sep = true
 
-					v, err := strconv.ParseInt(string(d.buf[d.pos:i]), 10, 64)
+					sentinel := string(d.buf[d.pos:i])
+					v, err := strconv.ParseInt(sentinel, 10, 64)
 					if err != nil {
+						if errors.Is(err, strconv.ErrRange) {
+							return nil, errors.New("length had int overflow")
+						}
 						// error something went wrong parsing length
 					}
 					length = int(v)
 
 					continue
+				} else {
+					if b < '0' || b > '9' {
+						// error, length not followed by separator
+						return nil, errors.New("missing separator")
+					}
 				}
+			} else {
+				byteString = append(byteString, b)
 			}
-
 		}
 	}
 
-	return nil, nil
+	// EOF
+	if len(byteString) != length {
+		// TODO MAKE ERRORS IN ERROR.GO
+		return byteString, errors.New("EOF")
+	}
+
+	return byteString, nil
 }
 
 func (d *Decoder) ParseList() ([]byte, error) {
