@@ -128,7 +128,6 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 	byteString := make([]byte, 0)
 
 	for i, b := range d.buf[d.pos:] {
-
 		if i == 0 {
 			if b == '-' { // invalid, byte string can't be negative
 				// throw error for negative byte string
@@ -174,6 +173,10 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 					}
 				}
 			} else {
+				if length == 0 && leadingZero {
+					return []byte(""), nil
+				}
+
 				byteString = append(byteString, b)
 
 				if len(byteString) == length {
@@ -185,6 +188,7 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 	}
 
 	// EOF
+
 	if len(byteString) != length {
 		// TODO MAKE ERRORS IN ERROR.GO
 		return byteString, errors.New("EOF")
@@ -196,6 +200,7 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 func (d *Decoder) ParseList() ([]interface{}, error) {
 	var list []interface{}
 	var term bool
+	top := true
 
 	if len(d.buf) == 0 {
 		return nil, errors.New("fucked up input my brother")
@@ -205,7 +210,7 @@ func (d *Decoder) ParseList() ([]interface{}, error) {
 		if d.buf[d.pos] == 'l' {
 			d.pos++
 
-			if d.pos > 1 {
+			if !top {
 				nestedList, err := d.ParseList()
 
 				list = append(list, nestedList)
@@ -213,6 +218,10 @@ func (d *Decoder) ParseList() ([]interface{}, error) {
 				if err != nil {
 					return nil, err
 				}
+			}
+
+			if top {
+				top = false
 			}
 
 			continue
@@ -225,7 +234,7 @@ func (d *Decoder) ParseList() ([]interface{}, error) {
 			break
 		}
 
-		if d.buf[d.pos] > '0' && d.buf[d.pos] < '9' {
+		if d.buf[d.pos] >= '0' && d.buf[d.pos] <= '9' {
 			bs, err := d.ParseByteString()
 			if err != nil {
 				return nil, err
