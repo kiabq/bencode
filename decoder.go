@@ -122,11 +122,13 @@ func (d *Decoder) ParseInt() (int64, error) {
 func (d *Decoder) ParseByteString() ([]byte, error) {
 	var length int
 	var sentinel []byte
+	var leadingZero bool
 
 	sep := false
 	byteString := make([]byte, 0)
 
 	for i, b := range d.buf[d.pos:] {
+
 		if i == 0 {
 			if b == '-' { // invalid, byte string can't be negative
 				// throw error for negative byte string
@@ -136,6 +138,10 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 			if b == ':' || b < '0' || b > '9' {
 				// no length, error
 				return nil, errors.New("no length")
+			}
+
+			if b == '0' {
+				leadingZero = true
 			}
 		} else {
 			if !sep {
@@ -154,8 +160,14 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 
 					length = int(v)
 
+					d.pos = d.pos + len(sentinel) + 1
+
 					continue
 				} else {
+					if leadingZero {
+						return nil, errors.New("length can't have leading zero")
+					}
+
 					if b < '0' || b > '9' {
 						// error, length not followed by separator
 						return nil, errors.New("missing separator")
@@ -165,7 +177,7 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 				byteString = append(byteString, b)
 
 				if len(byteString) == length {
-					d.pos = d.pos + len(byteString) + len(sentinel) + 1
+					d.pos = d.pos + len(byteString)
 					return byteString, nil
 				}
 			}
@@ -183,23 +195,20 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 
 func (d *Decoder) ParseList() ([]interface{}, error) {
 	var list []interface{}
+	var term bool
 
 	if len(d.buf) == 0 {
 		return nil, errors.New("fucked up input my brother")
 	}
 
 	for d.pos < len(d.buf) {
-		if len(d.buf[d.pos:]) == 0 {
-			return nil, errors.New("no terminator")
-		}
-
 		if d.buf[d.pos] == 'l' {
 			d.pos++
 
 			if d.pos > 1 {
 				nestedList, err := d.ParseList()
 
-				list = append(list, nestedList...)
+				list = append(list, nestedList)
 
 				if err != nil {
 					return nil, err
@@ -211,6 +220,8 @@ func (d *Decoder) ParseList() ([]interface{}, error) {
 
 		// last e in list, if no error by now, valid terminator
 		if d.buf[d.pos] == 'e' {
+			d.pos++
+			term = true
 			break
 		}
 
@@ -227,6 +238,10 @@ func (d *Decoder) ParseList() ([]interface{}, error) {
 			}
 			list = append(list, integer)
 		}
+	}
+
+	if !term {
+		return nil, errors.New("no terminator")
 	}
 
 	return list, nil
