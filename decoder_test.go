@@ -109,6 +109,51 @@ func TestDecoder(t *testing.T) {
 		}
 	})
 
-	t.Run("ParseList", func(t *testing.T) {})
+	t.Run("ParseList", func(t *testing.T) {
+		tests := []DecoderTest{
+			// valid
+			{name: "empty list", val: []byte("le"), fail: false},
+			{name: "single integer", val: []byte("li42ee"), fail: false},
+			{name: "single string", val: []byte("l4:spame"), fail: false},
+			{name: "multiple integers", val: []byte("li1ei2ei3ee"), fail: false},
+			{name: "multiple strings", val: []byte("l4:spam3:fooe"), fail: false},
+			{name: "mixed types", val: []byte("l4:spami42ee"), fail: false},
+			{name: "negative integer", val: []byte("li-5ee"), fail: false},
+			{name: "nested list", val: []byte("lli42eee"), fail: false},
+			{name: "nested empty list", val: []byte("llee"), fail: false},
+			{name: "string with spaces", val: []byte("l11:hello worlde"), fail: false},
+			// invalid
+			{name: "missing terminator", val: []byte("li42e"), fail: true},
+			{name: "unclosed nested list", val: []byte("lli42ee"), fail: true},
+			{name: "invalid integer inside", val: []byte("li042ee"), fail: true},
+			{name: "invalid string inside", val: []byte("l5:hie"), fail: true},
+			{name: "empty input", val: []byte(""), fail: true},
+		}
+		for _, tt := range tests {
+			t.Run(tt.name, func(t *testing.T) {
+				d := Decoder{
+					buf: make([]byte, 0),
+					pos: tt.pos,
+					Ret: nil,
+				}
+
+				d.buf = append(d.buf, tt.val...)
+
+				_, err := d.ParseList()
+				fmt.Println(tt.name)
+				if (err != nil) && !tt.fail {
+					fmt.Println("\t", err)
+					t.Errorf("ParseList %v: %v\n", tt.name, err)
+				} else {
+					t.Logf("ParseList %v: %v\n", tt.name, err)
+				}
+
+				//d.Ret = list
+
+				fmt.Printf("FINAL RESULT: %v\n", d.Ret)
+			})
+		}
+	})
+
 	t.Run("ParseDictionary", func(t *testing.T) {})
 }
