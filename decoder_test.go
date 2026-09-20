@@ -145,6 +145,8 @@ func TestDecoder(t *testing.T) {
 			{name: "nested list", val: []byte("lli42eee"), want: []interface{}{[]interface{}{int64(42)}}, end: 8},
 			{name: "nested empty list", val: []byte("llee"), end: 4},
 			{name: "string with spaces", val: []byte("l11:hello worlde"), want: []interface{}{[]byte("hello world")}, end: 16},
+			{name: "empty string element", val: []byte("l0:e"), want: []interface{}{[]byte("")}, end: 4},
+			{name: "length starts with nine", val: []byte("l9:123456789e"), want: []interface{}{[]byte("123456789")}, end: 13},
 			// invalid
 			{name: "missing terminator", val: []byte("li42e"), fail: true},
 			{name: "unclosed nested list", val: []byte("lli42ee"), fail: true},
