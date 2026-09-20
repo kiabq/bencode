@@ -47,10 +47,10 @@ func TestDecoder(t *testing.T) {
 				d.buf = append(d.buf, tt.val...)
 
 				integer, err := d.ParseInt()
-				if err != nil && !tt.fail {
+				if (err != nil) && !tt.fail {
 					t.Errorf("ParseInt: %v\n", err)
 				} else {
-					t.Logf("ParseInt: %d\n", integer)
+					t.Logf("ParseInt: \n\tValue:%d\n\tError:%v\n", integer, err)
 				}
 			})
 		}
@@ -69,6 +69,7 @@ func TestDecoder(t *testing.T) {
 			{name: "punctuation only", val: []byte("3:..."), fail: false},
 			{name: "url-like content", val: []byte("18:http://example.com"), fail: false},
 			{name: "binary content", val: append([]byte("3:"), 0x00, 0x01, 0x02), fail: false},
+			{name: "accounts for spaces", val: append([]byte("12:hello  world")), fail: false}, // 2 spaces, pos should be 12
 			// invalid
 			{name: "expect EOF", val: []byte("5:"), fail: true},
 			{name: "length 1 no content", val: []byte("1:"), fail: true},
@@ -88,13 +89,14 @@ func TestDecoder(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) {
 				d := Decoder{
 					buf: make([]byte, 0),
-					pos: 0,
+					pos: tt.pos,
 				}
 
 				d.buf = append(d.buf, tt.val...)
 
 				bs, err := d.ParseByteString()
-				if err != nil && !tt.fail {
+				if (err != nil) && !tt.fail {
+					fmt.Println("\t", err)
 					t.Errorf("ParseByteString %v: %v\n", tt.name, err)
 				} else {
 					t.Logf("ParseByteString %v: %v\n", tt.name, err)

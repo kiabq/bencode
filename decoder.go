@@ -2,7 +2,6 @@ package main
 
 import (
 	"errors"
-	"fmt"
 	"strconv"
 )
 
@@ -39,8 +38,9 @@ func (d *Decoder) Decode() error {
 	case 'd':
 		return nil
 	default:
-		if b >= '0' && b <= '9' {
-			return nil
+		_, err := d.ParseByteString() // figure out wtf to do with the value of this func
+		if err != nil {
+			return err
 		}
 	}
 
@@ -56,15 +56,14 @@ func (d *Decoder) ParseInt() (int64, error) {
 		}
 
 		if i == 1 {
-			if b == '0' { // check for zero, used to determine leading zero later
+			switch b {
+			case '0':
 				startZero = true
-			}
-
-			if b == '-' { // check if int negative
+			case '-':
 				startNegative = true
-			}
-
-			if b == 'e' {
+			case '+':
+				return 0, errors.New("incorrect prefix")
+			case 'e':
 				return 0, errors.New("no integer")
 			}
 
@@ -87,13 +86,8 @@ func (d *Decoder) ParseInt() (int64, error) {
 			integerSlice := d.buf[d.pos+1 : d.pos+i]
 			integer, err := strconv.ParseInt(string(integerSlice), 10, 64)
 
-			fmt.Println(string(integerSlice))
-			fmt.Println("INT GREATER THAN ZERO: ", integer > 0)
-			fmt.Println("INT IS NEGATIVE: ", startNegative)
-
 			// err int underflow
 			if startNegative && integer > 0 {
-
 				return 0, errors.New("integer underflow")
 			}
 
@@ -118,10 +112,11 @@ func (d *Decoder) ParseInt() (int64, error) {
 }
 
 func (d *Decoder) ParseByteString() ([]byte, error) {
-	var sep = false
-	//var eof = false
 	var length int
-	var byteString = make([]byte, 0)
+	var sentinel []byte
+
+	sep := false
+	byteString := make([]byte, 0)
 
 	for i, b := range d.buf[d.pos:] {
 		if i == 0 {
@@ -139,14 +134,16 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 				if b == ':' {
 					sep = true
 
-					sentinel := string(d.buf[d.pos:i])
-					v, err := strconv.ParseInt(sentinel, 10, 64)
+					sentinel = d.buf[d.pos : d.pos+i]
+					v, err := strconv.ParseInt(string(sentinel), 10, 64)
 					if err != nil {
 						if errors.Is(err, strconv.ErrRange) {
 							return nil, errors.New("length had int overflow")
 						}
-						// error something went wrong parsing length
+
+						// error something went wrong parsing length (EOF error)
 					}
+
 					length = int(v)
 
 					continue
@@ -168,12 +165,13 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 		return byteString, errors.New("EOF")
 	}
 
+	// update cursor position
+	d.pos = d.pos + length + 1
+
 	return byteString, nil
 }
 
 func (d *Decoder) ParseList() ([]byte, error) {
-	d.pos++
-
 	return nil, nil
 }
 
