@@ -21,6 +21,7 @@ e
 type Decoder struct {
 	buf []byte
 	pos int
+	Ret interface{} `json:"ret"` // how the fuck do i build this?
 }
 
 // TODO: PASS IO READER INTO THIS METHOD
@@ -34,9 +35,15 @@ func (d *Decoder) Decode() error {
 			return err
 		}
 	case 'l':
-		return nil
+		_, err := d.ParseList()
+		if err != nil {
+			return err
+		}
 	case 'd':
-		return nil
+		_, err := d.ParseDictionary()
+		if err != nil {
+			return err
+		}
 	default:
 		_, err := d.ParseByteString() // figure out wtf to do with the value of this func
 		if err != nil {
@@ -101,7 +108,8 @@ func (d *Decoder) ParseInt() (int64, error) {
 				return 0, err // parse int failed
 			}
 
-			d.pos += i + 1
+			d.pos = d.pos + i + 1
+
 			return integer, nil
 		} else {
 			return 0, errors.New("wrong terminator")
@@ -155,6 +163,11 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 				}
 			} else {
 				byteString = append(byteString, b)
+
+				if len(byteString) == length {
+					d.pos = d.pos + len(byteString) + len(sentinel) + 1
+					return byteString, nil
+				}
 			}
 		}
 	}
@@ -165,14 +178,58 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 		return byteString, errors.New("EOF")
 	}
 
-	// update cursor position
-	d.pos = d.pos + length + 1
-
-	return byteString, nil
+	return nil, nil
 }
 
-func (d *Decoder) ParseList() ([]byte, error) {
-	return nil, nil
+func (d *Decoder) ParseList() ([]interface{}, error) {
+	var list []interface{}
+
+	if len(d.buf) == 0 {
+		return nil, errors.New("fucked up input my brother")
+	}
+
+	for d.pos < len(d.buf) {
+		if len(d.buf[d.pos:]) == 0 {
+			return nil, errors.New("no terminator")
+		}
+
+		if d.buf[d.pos] == 'l' {
+			d.pos++
+
+			if d.pos > 1 {
+				nestedList, err := d.ParseList()
+
+				list = append(list, nestedList...)
+
+				if err != nil {
+					return nil, err
+				}
+			}
+
+			continue
+		}
+
+		// last e in list, if no error by now, valid terminator
+		if d.buf[d.pos] == 'e' {
+			break
+		}
+
+		if d.buf[d.pos] > '0' && d.buf[d.pos] < '9' {
+			bs, err := d.ParseByteString()
+			if err != nil {
+				return nil, err
+			}
+			list = append(list, bs)
+		} else {
+			integer, err := d.ParseInt()
+			if err != nil {
+				return nil, err
+			}
+			list = append(list, integer)
+		}
+	}
+
+	return list, nil
 }
 
 func (d *Decoder) ParseDictionary() ([]byte, error) {
