@@ -54,10 +54,6 @@ func (d *Decoder) expand(offset int) {
 	d.pos = d.pos + offset
 }
 
-// What are we doing that we can abstract?
-// - access current byte
-// - expand cursor to Nth value
-
 // TODO: PASS IO READER INTO THIS METHOD
 func (d *Decoder) Decode() error {
 	b := d.curr()
@@ -124,7 +120,7 @@ func (d *Decoder) ParseInt() (int64, error) {
 		}
 
 		if b == 'e' { // if not number, then it is end.
-			integerSlice, err := d.slice(1, i) // d.buf[d.pos+1 : d.pos+i]  low value, high value
+			integerSlice, err := d.slice(1, i)
 			if err != nil {
 				return 0, err
 			}
@@ -239,7 +235,7 @@ func (d *Decoder) ParseList() ([]interface{}, error) {
 
 	d.expand(1) // eat current byte because current byte sits on 'l'. prevent infinite loops
 
-	// TODO ACCOUNT FOR DICTIONARIES IN LISTde
+	// TODO ACCOUNT FOR DICTIONARIES IN LIST
 	for d.pos < len(d.buf) {
 		if d.curr() == 'e' { // compliments d.expand(1) at top of func. if 'e' is found, it belongs to the list
 			d.expand(1)
