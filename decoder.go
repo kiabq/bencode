@@ -142,7 +142,7 @@ func (d *Decoder) ParseInt() (int64, error) {
 				return 0, err // parse int failed
 			}
 
-			d.expand(i + 1)
+			d.expand(i + 1) // account for length of current []byte position + next value 'e'
 
 			return integer, nil
 		} else {
@@ -198,7 +198,7 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 					}
 
 					length = int(v)
-					d.expand(len(sentinel) + 1)
+					d.expand(len(sentinel) + 1) // account for length of int slice + the semi-colon
 					continue
 				} else {
 					if leadingZero {
@@ -214,7 +214,7 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 				byteString = append(byteString, b)
 
 				if len(byteString) == length {
-					d.expand(len(byteString))
+					d.expand(len(byteString)) // advance cursor by length of string
 					return byteString, nil
 				}
 			}
