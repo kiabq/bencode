@@ -24,9 +24,43 @@ type Decoder struct {
 	Ret interface{} `json:"ret"` // how the fuck do i build this?
 }
 
+func (d *Decoder) curr() byte {
+	return d.buf[d.pos]
+}
+
+func (d *Decoder) read() []byte {
+	return d.buf[d.pos:]
+}
+
+func (d *Decoder) peek() (b byte, err error) {
+	defer func() {
+		if recover() != nil {
+			err = errors.New("cursor out of bounds")
+		}
+	}()
+
+	return d.buf[d.pos+1], err
+}
+
+func (d *Decoder) slice(start, end int) ([]byte, error) {
+	lo, hi := d.pos+start, d.pos+end
+	if lo < 0 || hi > len(d.buf) || lo > hi {
+		return nil, errors.New("slice out of bounds")
+	}
+	return d.buf[lo:hi], nil
+}
+
+func (d *Decoder) expand(offset int) {
+	d.pos = d.pos + offset
+}
+
+// What are we doing that we can abstract?
+// - access current byte
+// - expand cursor to Nth value
+
 // TODO: PASS IO READER INTO THIS METHOD
 func (d *Decoder) Decode() error {
-	b := d.buf[d.pos]
+	b := d.curr()
 
 	switch b {
 	case 'i':
@@ -57,7 +91,7 @@ func (d *Decoder) Decode() error {
 func (d *Decoder) ParseInt() (int64, error) {
 	startZero := false
 	startNegative := false
-	for i, b := range d.buf[d.pos:] {
+	for i, b := range d.read() {
 		if i == 0 { // byte is 'i', skip loop
 			continue
 		}
@@ -90,7 +124,11 @@ func (d *Decoder) ParseInt() (int64, error) {
 		}
 
 		if b == 'e' { // if not number, then it is end.
-			integerSlice := d.buf[d.pos+1 : d.pos+i]
+			integerSlice, err := d.slice(1, i) // d.buf[d.pos+1 : d.pos+i]  low value, high value
+			if err != nil {
+				return 0, err
+			}
+
 			integer, err := strconv.ParseInt(string(integerSlice), 10, 64)
 
 			// err int underflow
@@ -108,7 +146,7 @@ func (d *Decoder) ParseInt() (int64, error) {
 				return 0, err // parse int failed
 			}
 
-			d.pos = d.pos + i + 1
+			d.expand(i + 1)
 
 			return integer, nil
 		} else {
@@ -123,11 +161,12 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 	var length int
 	var sentinel []byte
 	var leadingZero bool
+	var err error
 
 	sep := false
 	byteString := make([]byte, 0)
 
-	for i, b := range d.buf[d.pos:] {
+	for i, b := range d.read() {
 		if i == 0 {
 			if b == '-' { // invalid, byte string can't be negative
 				// throw error for negative byte string
@@ -147,20 +186,23 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 				if b == ':' {
 					sep = true
 
-					sentinel = d.buf[d.pos : d.pos+i]
+					sentinel, err = d.slice(0, i)
+					if err != nil {
+						return nil, err
+					}
+
 					v, err := strconv.ParseInt(string(sentinel), 10, 64)
 					if err != nil {
 						if errors.Is(err, strconv.ErrRange) {
 							return nil, errors.New("length had int overflow")
+						} else {
+							// not quite sure what to do with other errors atm
+							return nil, err
 						}
-
-						// error something went wrong parsing length (EOF error)
 					}
 
 					length = int(v)
-
-					d.pos = d.pos + len(sentinel) + 1
-
+					d.expand(len(sentinel) + 1)
 					continue
 				} else {
 					if leadingZero {
@@ -173,68 +215,45 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 					}
 				}
 			} else {
-				if length == 0 && leadingZero {
-					return []byte(""), nil
-				}
-
 				byteString = append(byteString, b)
 
 				if len(byteString) == length {
-					d.pos = d.pos + len(byteString)
+					d.expand(len(byteString))
 					return byteString, nil
 				}
 			}
 		}
 	}
 
-	// EOF
-
-	if len(byteString) != length {
-		// TODO MAKE ERRORS IN ERROR.GO
-		return byteString, errors.New("EOF")
+	if length == 0 && leadingZero && sep {
+		return []byte(""), nil
 	}
 
-	return nil, nil
+	// EOF
+	return byteString, errors.New("EOF")
 }
 
 func (d *Decoder) ParseList() ([]interface{}, error) {
 	var list []interface{}
 	var term bool
-	top := true
 
-	if len(d.buf) == 0 {
-		return nil, errors.New("fucked up input my brother")
-	}
+	d.expand(1) // eat current byte because current byte sits on 'l'. prevent infinite loops
 
+	// TODO ACCOUNT FOR DICTIONARIES IN LISTde
 	for d.pos < len(d.buf) {
-		if d.buf[d.pos] == 'l' {
-			d.pos++
-
-			if !top {
-				nestedList, err := d.ParseList()
-
-				list = append(list, nestedList)
-
-				if err != nil {
-					return nil, err
-				}
-			}
-
-			if top {
-				top = false
-			}
-
-			continue
-		}
-
-		// last e in list, if no error by now, valid terminator
-		if d.buf[d.pos] == 'e' {
-			d.pos++
+		if d.curr() == 'e' { // compliments d.expand(1) at top of func. if 'e' is found, it belongs to the list
+			d.expand(1)
 			term = true
 			break
 		}
 
-		if d.buf[d.pos] >= '0' && d.buf[d.pos] <= '9' {
+		if d.curr() == 'l' {
+			nestedList, err := d.ParseList()
+			if err != nil {
+				return nil, err
+			}
+			list = append(list, nestedList)
+		} else if d.curr() >= '0' && d.curr() <= '9' {
 			bs, err := d.ParseByteString()
 			if err != nil {
 				return nil, err
@@ -250,7 +269,7 @@ func (d *Decoder) ParseList() ([]interface{}, error) {
 	}
 
 	if !term {
-		return nil, errors.New("no terminator")
+		return nil, errors.New("ParseList - no terminator")
 	}
 
 	return list, nil
