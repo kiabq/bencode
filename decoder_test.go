@@ -97,6 +97,11 @@ func TestDecoder(t *testing.T) {
 			{name: "negative length", val: []byte("-3:abc"), fail: true},
 			{name: "missing length", val: []byte(":hello"), fail: true},
 			{name: "no separator", val: []byte("5hello"), fail: true},
+			// length runs to EOF without a ':' - must error, not return a
+			// nil error, or ParseList spins on a child that consumed nothing
+			{name: "length only no separator", val: []byte("5"), fail: true},
+			{name: "multi-digit length no separator", val: []byte("12"), fail: true},
+			{name: "zero length no separator", val: []byte("0"), fail: true},
 			{name: "letter prefix", val: []byte("abc"), fail: true},
 			{name: "non-digit in length", val: []byte("3a:foo"), fail: true},
 			{name: "leading zero in length", val: []byte("07:bencode"), fail: true},
@@ -143,13 +148,19 @@ func TestDecoder(t *testing.T) {
 			{name: "negative integer", val: []byte("li-5ee"), want: []interface{}{int64(-5)}, end: 6},
 			{name: "element after nested list", val: []byte("lli42eei7ee"), want: []interface{}{[]interface{}{int64(42)}, int64(7)}, end: 11},
 			{name: "nested list", val: []byte("lli42eee"), want: []interface{}{[]interface{}{int64(42)}}, end: 8},
+			{name: "deeply nested list", val: []byte("llleee"), end: 6},
+			{name: "deeply nested list", val: []byte("llllllllleeeeeeeee"), end: 18},
 			{name: "nested empty list", val: []byte("llee"), end: 4},
 			{name: "string with spaces", val: []byte("l11:hello worlde"), want: []interface{}{[]byte("hello world")}, end: 16},
 			{name: "empty string element", val: []byte("l0:e"), want: []interface{}{[]byte("")}, end: 4},
 			{name: "length starts with nine", val: []byte("l9:123456789e"), want: []interface{}{[]byte("123456789")}, end: 13},
+			{name: "length only no separator", val: []byte("l5"), fail: true},
+			{name: "multi-digit length no separator", val: []byte("l12"), fail: true},
+			{name: "zero length no separator", val: []byte("l0"), fail: true},
 			// invalid
 			{name: "missing terminator", val: []byte("li42e"), fail: true},
 			{name: "unclosed nested list", val: []byte("lli42ee"), fail: true},
+			{name: "unclosed deeply nested list", val: []byte("lllee"), fail: true},
 			{name: "invalid integer inside", val: []byte("li042ee"), fail: true},
 			{name: "invalid string inside", val: []byte("l5:hie"), fail: true},
 			{name: "empty input", val: []byte(""), fail: true},
@@ -174,6 +185,7 @@ func TestDecoder(t *testing.T) {
 				if err != nil {
 					t.Fatalf("unexpected error: %v", err)
 				}
+
 				if tt.want != nil && !reflect.DeepEqual(got, tt.want) {
 					t.Errorf("value = %#v, want %#v", got, tt.want)
 				}
