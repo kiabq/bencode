@@ -9,6 +9,8 @@ package main
 //	Contains non-digit characters
 //  Has a leading zero
 //  Is negative zero
+//  Int Underflow
+//  Int Overflow
 // Byte string errors
 //	Negative length
 // 	Length not followed by ':'

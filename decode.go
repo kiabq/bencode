@@ -32,16 +32,6 @@ func (d *Decoder) read() []byte {
 	return d.buf[d.pos:]
 }
 
-func (d *Decoder) peek() (b byte, err error) {
-	defer func() {
-		if recover() != nil {
-			err = errors.New("cursor out of bounds")
-		}
-	}()
-
-	return d.buf[d.pos+1], err
-}
-
 func (d *Decoder) slice(start, end int) ([]byte, error) {
 	lo, hi := d.pos+start, d.pos+end
 	if lo < 0 || hi > len(d.buf) || lo > hi {
@@ -162,6 +152,12 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 	sep := false
 	byteString := make([]byte, 0)
 
+	// WIP refactor
+	for d.pos < len(d.buf) {
+
+		// check if - ;  < 0 or > 9
+	}
+
 	for i, b := range d.read() {
 		if i == 0 {
 			if b == '-' { // invalid, byte string can't be negative
@@ -198,7 +194,7 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 					}
 
 					length = int(v)
-					d.expand(len(sentinel) + 1) // account for length of int slice + the semi-colon
+					d.expand(len(sentinel) + 1) // account for length of int slice + the semicolon
 					continue
 				} else {
 					if leadingZero {
