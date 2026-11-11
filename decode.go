@@ -178,11 +178,11 @@ func (d *Decoder) ParseByteString() ([]byte, error) {
 			}
 
 			d.advance(1)
+
 			if length == 0 {
-				fmt.Println("empty length")
 				return []byte(""), nil
 			} else if length > 0 {
-				byteSize = length // length + sentinel + :
+				byteSize = length
 			} else {
 				// catch negative length
 				return nil, errors.New("negative length")
