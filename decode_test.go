@@ -97,6 +97,10 @@ func TestDecoder(t *testing.T) {
 			{name: "negative length", val: []byte("-3:abc"), fail: true},
 			{name: "missing length", val: []byte(":hello"), fail: true},
 			{name: "no separator", val: []byte("5hello"), fail: true},
+			{name: "", val: []byte("+5:hello"), fail: true},
+			{name: "", val: []byte("-0:"), fail: true},
+			{name: "", val: []byte("-0:x"), fail: true},
+			{name: "", val: []byte("+0:"), fail: true},
 			// length runs to EOF without a ':' - must error, not return a
 			// nil error, or ParseList spins on a child that consumed nothing
 			{name: "length only no separator", val: []byte("5"), fail: true},
