@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"strconv"
 )
 
@@ -19,9 +20,10 @@ e
 */
 
 type Decoder struct {
-	buf []byte
-	pos int
-	Ret interface{} `json:"ret"` // how the fuck do i build this?
+	buf  []byte
+	pos  int
+	step int
+	Ret  interface{} `json:"ret"` // how the fuck do i build this?
 }
 
 func (d *Decoder) curr() byte {
@@ -40,7 +42,8 @@ func (d *Decoder) slice(start, end int) ([]byte, error) {
 	return d.buf[lo:hi], nil
 }
 
-func (d *Decoder) expand(offset int) {
+func (d *Decoder) advance(offset int) {
+	d.step++
 	d.pos = d.pos + offset
 }
 
@@ -132,7 +135,7 @@ func (d *Decoder) ParseInt() (int64, error) {
 				return 0, err // parse int failed
 			}
 
-			d.expand(i + 1) // account for length of current []byte position + next value 'e'
+			d.advance(i + 1) // account for length of current []byte position + next value 'e'
 
 			return integer, nil
 		} else {
@@ -144,102 +147,84 @@ func (d *Decoder) ParseInt() (int64, error) {
 }
 
 func (d *Decoder) ParseByteString() ([]byte, error) {
-	var length int
-	var sentinel []byte
-	var leadingZero bool
-	var err error
-
-	sep := false
+	index := d.pos
 	byteString := make([]byte, 0)
+	byteSize := int64(0)
 
-	// WIP refactor
+	// scan to within bound of buffer
+	// a recursive descent parser would work if the grammar
+	// could be constructed as tree, but grammar can't be dynamic
+	// the best we can do is peek ahead
+
+	// use parseint when we find value
 	for d.pos < len(d.buf) {
+		if d.curr() == ':' && byteSize == 0 {
+			sentinel := string(d.buf[index:d.pos])
 
-		// check if - ;  < 0 or > 9
-	}
-
-	for i, b := range d.read() {
-		if i == 0 {
-			if b == '-' { // invalid, byte string can't be negative
-				// throw error for negative byte string
-				return nil, errors.New("length can't be negative")
-			}
-
-			if b == ':' || b < '0' || b > '9' {
-				// no length, error
-				return nil, errors.New("no length")
-			}
-
-			if b == '0' {
-				leadingZero = true
-			}
-		} else {
-			if !sep {
-				if b == ':' {
-					sep = true
-
-					sentinel, err = d.slice(0, i)
-					if err != nil {
-						return nil, err
-					}
-
-					v, err := strconv.ParseInt(string(sentinel), 10, 64)
-					if err != nil {
-						if errors.Is(err, strconv.ErrRange) {
-							return nil, errors.New("length had int overflow")
-						} else {
-							// not quite sure what to do with other errors atm
-							return nil, err
-						}
-					}
-
-					length = int(v)
-					d.expand(len(sentinel) + 1) // account for length of int slice + the semicolon
-					continue
+			// get bytestring length
+			length, err := strconv.ParseInt(sentinel, 10, 64)
+			if err != nil {
+				if errors.Is(err, strconv.ErrRange) {
+					return nil, errors.New("length had int overflow")
 				} else {
-					if leadingZero {
-						return nil, errors.New("length can't have leading zero")
-					}
-
-					if b < '0' || b > '9' {
-						// error, length not followed by separator
-						return nil, errors.New("missing separator")
-					}
-				}
-			} else {
-				byteString = append(byteString, b)
-
-				if len(byteString) == length {
-					d.expand(len(byteString)) // advance cursor by length of string
-					return byteString, nil
+					// not quite sure what to do with other errors atm
+					return nil, err
 				}
 			}
+
+			// leading zero error
+			if sentinel[0] == '0' && len(sentinel) >= 2 {
+				return nil, errors.New("leading zero error")
+			}
+
+			d.advance(1)
+			if length == 0 {
+				fmt.Println("empty length")
+				return []byte(""), nil
+			} else if length > 0 {
+				byteSize = length // length + sentinel + :
+			} else {
+				// catch negative length
+				return nil, errors.New("negative length")
+			}
+			continue
 		}
+
+		if byteSize == 0 {
+			d.advance(1)
+			continue
+		}
+
+		byteString = append(byteString, d.curr())
+
+		if int64(len(byteString)) == byteSize {
+			d.advance(1)
+			return byteString, nil
+		}
+
+		d.advance(1)
 	}
 
-	if length == 0 && leadingZero && sep {
-		return []byte(""), nil
-	}
-
-	// EOF
-	return byteString, errors.New("EOF")
+	return nil, errors.New("unexpected end of input")
 }
 
 func (d *Decoder) ParseList() ([]interface{}, error) {
 	var list []interface{}
 	var term bool
 
-	d.expand(1) // eat current byte because current byte sits on 'l'. prevent infinite loops
+	d.advance(1) // eat current byte because current byte sits on 'l'. prevent infinite loops
 
 	// TODO ACCOUNT FOR DICTIONARIES IN LIST
 	for d.pos < len(d.buf) {
-		if d.curr() == 'e' { // compliments d.expand(1) at top of func. if 'e' is found, it belongs to the list
-			d.expand(1)
+		if d.curr() == 'e' { // compliments d.advance(1) at top of func. if 'e' is found, it belongs to the list
+			d.advance(1)
 			term = true
 			break
 		}
 
-		if d.curr() == 'l' {
+		if d.curr() == 'd' {
+			continue
+		} else if d.curr() == 'l' {
 			nestedList, err := d.ParseList()
 			if err != nil {
 				return nil, err
